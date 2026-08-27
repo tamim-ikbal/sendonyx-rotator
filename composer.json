@@ -105,7 +105,7 @@
             "echo 'Composer Package Installed!'",
             "@php artisan config:clear --quiet --no-interaction",
             "echo 'Config Cache Cleared!'",
-            "@php artisan migrate --force --no-interaction --database=mysql_migration",
+            "@php artisan migrate --force --no-interaction",
             "echo 'Migration Done!'",
             "@php artisan event:clear --quiet --no-interaction",
             "@php artisan route:clear --quiet --no-interaction",
