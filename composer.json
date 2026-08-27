@@ -97,6 +97,35 @@
         ],
         "pre-package-uninstall": [
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ],
+        "deploy": [
+            "echo 'Deploying Started!'",
+            "Composer\\Config::disableProcessTimeout",
+            "@composer install --no-dev --no-interaction --no-progress --optimize-autoloader",
+            "echo 'Composer Package Installed!'",
+            "@php artisan config:clear --quiet --no-interaction",
+            "echo 'Config Cache Cleared!'",
+            "@php artisan migrate --force --no-interaction --database=mysql_migration",
+            "echo 'Migration Done!'",
+            "@php artisan event:clear --quiet --no-interaction",
+            "@php artisan route:clear --quiet --no-interaction",
+            "@php artisan view:clear --quiet --no-interaction",
+            "echo 'Cache Cleared!'",
+            "echo 'Installing NPM Packages...'",
+            "npm ci",
+            "echo 'NPM Packages Reinstalled!'",
+            "npm run build",
+            "echo 'Frontend build complete!'",
+            "@php artisan storage:link --quiet --no-interaction",
+            "echo 'Symbolic link created!'",
+            "@php artisan config:cache --quiet --no-interaction",
+            "@php artisan route:cache --quiet --no-interaction",
+            "@php artisan view:cache --quiet --no-interaction",
+            "@php artisan event:cache --quiet --no-interaction",
+            "echo 'Cache Builded!'",
+            "@php artisan queue:restart --quiet --no-interaction",
+            "echo 'Queue restart signal!'",
+            "echo 'Deploy Completed!'"
         ]
     },
     "extra": {
