@@ -5,6 +5,18 @@ use App\Models\TrafficRotator;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 
+test('allows a rotator only while the user owns none of their own', function () {
+    $user = User::factory()->create();
+    // Someone else's rotator is outside the limit: it is counted per owner.
+    TrafficRotator::factory()->create();
+
+    expect(Gate::forUser($user)->allows('create', TrafficRotator::class))->toBeTrue();
+
+    TrafficRotator::factory()->for($user)->create();
+
+    expect(Gate::forUser($user)->allows('create', TrafficRotator::class))->toBeFalse();
+});
+
 test('grants the owner every rotator ability', function (string $ability) {
     $owner = User::factory()->create();
     $rotator = TrafficRotator::factory()->for($owner)->create();

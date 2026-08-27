@@ -25,3 +25,10 @@ The offset travels as a binding, not interpolated, so `sql()` stays a `literal-s
 Settled 2026-08-27: consistency of the `{value, previous_value, indicator}` envelope beats per-metric special casing, even though the original design sketch's `0.42` reads like points. Do not special-case CTR.
 
 The rate is always a magnitude — direction lives in `position`. No baseline gives `flat` with a **null** rate, which is how a caller distinguishes "did not move" from "nothing to compare against". Keep that null; zero would collapse the two.
+
+## Stats and chart are two endpoints with two default ranges
+`DestinationStatsBuilder::stats()` returns `range` + `kpis`; `chart()` returns `range` + `series` + `tiles`. They are split because they are read on different windows: `DestinationStatsRequest` defaults to `all_time`, `DestinationChartRequest` to `last_30_days`. Both extend `DestinationReportRequest`, which owns the shared `range` rule and the `view` gate.
+
+Settled 2026-08-28: the tiles (click-through rate, avg daily clicks, top country/device) stay on `/chart` even though they are aggregates, not series — that was the user's call, so do not "tidy" them over to `/stats`.
+
+Both reports still run `totals()`, so neither is free; do not merge them back to save a query.

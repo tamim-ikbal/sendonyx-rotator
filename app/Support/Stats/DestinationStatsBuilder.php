@@ -12,41 +12,32 @@ use Illuminate\Support\Facades\DB;
 use stdClass;
 
 /**
- * Assembles everything the destination chart shows, in three queries.
+ * Assembles the two destination reports: the headline figures and the chart.
  *
- * The count of queries is the design, not an optimisation. A click on a
- * destination is by definition a click on its rotator, so every headline number
- * falls out of one range scan over (rotator_id, created_at) with a CASE
+ * The query count is the design, not an optimisation. A click on a destination
+ * is by definition a click on its rotator, so every figure that compares the
+ * two falls out of one range scan over (rotator_id, created_at) with a CASE
  * projection per figure; the series and the two dimension tiles take one each.
+ *
+ * The reports are split because they are read on different windows: stats
+ * default to all time, the chart to the last 30 days. Neither pays for the
+ * other's queries.
  */
 final class DestinationStatsBuilder
 {
     /**
-     * Build the chart payload for a destination over the given range.
+     * Build the headline figures for a destination over the given range.
      *
      * @return array<string, mixed>
      */
-    public function build(TrafficRotatorDestination $destination, StatsRange $range): array
+    public function stats(TrafficRotatorDestination $destination, StatsRange $range): array
     {
-        $timezone = config()->string('app.timezone');
-
-        /** @var CarbonImmutable $createdAt */
-        $createdAt = $destination->created_at;
-
-        $window = StatsDateRange::for($range, $createdAt, $timezone);
-        $activeSince = $createdAt->setTimezone($timezone);
-
+        $window = $this->window($destination, $range);
         $totals = $this->totals($destination, $window);
-        $tops = $this->topDimensions($destination, $window);
-        $days = $window->days();
+        $activeSince = $this->activeSince($destination, $window);
 
         return [
-            'range' => [
-                'key' => $range->value,
-                'start' => $window->start->toDateString(),
-                'end' => $window->end->toDateString(),
-                'granularity' => $window->granularity->value,
-            ],
+            'range' => $this->rangeEnvelope($window),
             'kpis' => [
                 'clicks_received' => $this->metric($totals->clicks, $totals->previousClicks, $range),
                 'unique_visitors' => $this->metric($totals->visitors, $totals->previousVisitors, $range),
@@ -56,6 +47,23 @@ final class DestinationStatsBuilder
                     'days' => max(0, (int) $activeSince->startOfDay()->diffInDays($window->now->startOfDay())),
                 ],
             ],
+        ];
+    }
+
+    /**
+     * Build the chart payload for a destination over the given range.
+     *
+     * @return array<string, mixed>
+     */
+    public function chart(TrafficRotatorDestination $destination, StatsRange $range): array
+    {
+        $window = $this->window($destination, $range);
+        $totals = $this->totals($destination, $window);
+        $tops = $this->topDimensions($destination, $window);
+        $days = $window->days();
+
+        return [
+            'range' => $this->rangeEnvelope($window),
             'series' => $this->series($destination, $window),
             'tiles' => [
                 // The share of the pool the destination actually captured. A
@@ -76,6 +84,43 @@ final class DestinationStatsBuilder
                 'top_country' => $this->dimensionTile($tops['country'], $totals->visitors),
                 'top_device' => $this->dimensionTile($tops['device'], $totals->visitors),
             ],
+        ];
+    }
+
+    /**
+     * Resolve the window both reports run their queries against.
+     */
+    private function window(TrafficRotatorDestination $destination, StatsRange $range): StatsDateRange
+    {
+        /** @var CarbonImmutable $createdAt */
+        $createdAt = $destination->created_at;
+
+        return StatsDateRange::for($range, $createdAt, config()->string('app.timezone'));
+    }
+
+    /**
+     * Get the moment the destination appeared, in the display timezone.
+     */
+    private function activeSince(TrafficRotatorDestination $destination, StatsDateRange $window): CarbonImmutable
+    {
+        /** @var CarbonImmutable $createdAt */
+        $createdAt = $destination->created_at;
+
+        return $createdAt->setTimezone($window->timezone);
+    }
+
+    /**
+     * Describe the window both reports echo back to the caller.
+     *
+     * @return array{key: string, start: string, end: string, granularity: string}
+     */
+    private function rangeEnvelope(StatsDateRange $window): array
+    {
+        return [
+            'key' => $window->range->value,
+            'start' => $window->start->toDateString(),
+            'end' => $window->end->toDateString(),
+            'granularity' => $window->granularity->value,
         ];
     }
 

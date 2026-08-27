@@ -1,6 +1,12 @@
 <?php
 
+use App\Models\TrafficRotator;
+use App\Models\TrafficRotatorClick;
+use App\Models\TrafficRotatorDestination;
+use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Tests\TestCase;
 
 /*
@@ -44,7 +50,28 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Create a destination whose rotator belongs to a freshly created owner.
+ */
+function reportDestination(string $createdAt = '2026-01-01 00:00:00'): TrafficRotatorDestination
 {
-    // ..
+    $rotator = TrafficRotator::factory()->for(User::factory())->create();
+
+    return TrafficRotatorDestination::factory()->forRotator($rotator)->create([
+        'created_at' => CarbonImmutable::parse($createdAt, 'UTC'),
+    ]);
+}
+
+/**
+ * Record clicks against a destination at a given moment.
+ *
+ * @return Collection<int, TrafficRotatorClick>
+ */
+function clicksAt(TrafficRotatorDestination $destination, string $moment, int $count = 1): Collection
+{
+    return TrafficRotatorClick::factory()
+        ->count($count)
+        ->forDestination($destination)
+        ->at(CarbonImmutable::parse($moment, 'UTC'))
+        ->create();
 }

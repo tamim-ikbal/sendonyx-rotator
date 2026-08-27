@@ -29,6 +29,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $default_destination_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read int|null $clicks_count
+ * @property-read int|null $destinations_count
  */
 #[Fillable(['name', 'slug', 'status', 'default_destination_url'])]
 #[ObservedBy(TrafficRotatorObserver::class)]

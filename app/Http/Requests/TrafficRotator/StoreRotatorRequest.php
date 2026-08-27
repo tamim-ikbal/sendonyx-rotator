@@ -3,13 +3,28 @@
 namespace App\Http\Requests\TrafficRotator;
 
 use App\Concerns\RotatorValidationRules;
+use App\Models\TrafficRotator;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 class StoreRotatorRequest extends FormRequest
 {
     use RotatorValidationRules;
+
+    /**
+     * Deny a second rotator before the request is validated.
+     *
+     * Authorising here rather than in the controller keeps the one rotator
+     * limit on the same footing as ownership: the refusal lands before
+     * validation, so a rejected request never answers with a 422 instead.
+     */
+    public function authorize(): Response
+    {
+        return Gate::inspect('create', TrafficRotator::class);
+    }
 
     /**
      * Derive the slug from the name when the caller did not supply one.

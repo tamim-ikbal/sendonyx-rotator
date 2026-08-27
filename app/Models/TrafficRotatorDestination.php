@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property DestinationStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read int|null $clicks_count
  */
 #[Fillable(['url', 'weight', 'status'])]
 #[ObservedBy(TrafficRotatorDestinationObserver::class)]

@@ -16,6 +16,19 @@ use Illuminate\Auth\Access\Response;
 class TrafficRotatorPolicy
 {
     /**
+     * Determine whether the user can create a rotator.
+     *
+     * The product is limited to a single rotator per user for now, so the
+     * ability is denied rather than the second rotator being silently ignored.
+     */
+    public function create(User $user): Response
+    {
+        return $user->rotators()->doesntExist()
+            ? Response::allow()
+            : Response::deny(__('You can only have one rotator.'));
+    }
+
+    /**
      * Determine whether the user can view the rotator.
      */
     public function view(User $user, TrafficRotator $rotator): Response

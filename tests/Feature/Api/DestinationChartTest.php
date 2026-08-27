@@ -7,7 +7,6 @@ use App\Models\TrafficRotatorClick;
 use App\Models\TrafficRotatorDestination;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Collection;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 
@@ -16,18 +15,6 @@ beforeEach(function () {
     // dates it should produce from here, not derived from the implementation.
     $this->travelTo(CarbonImmutable::parse('2026-08-27 12:00:00', 'UTC'));
 });
-
-/**
- * Create a destination whose rotator belongs to a freshly created owner.
- */
-function chartDestination(string $createdAt = '2026-01-01 00:00:00'): TrafficRotatorDestination
-{
-    $rotator = TrafficRotator::factory()->for(User::factory())->create();
-
-    return TrafficRotatorDestination::factory()->forRotator($rotator)->create([
-        'created_at' => CarbonImmutable::parse($createdAt, 'UTC'),
-    ]);
-}
 
 /**
  * Act as the owner of the destination and request its chart.
@@ -45,27 +32,15 @@ function chart(TrafficRotatorDestination $destination, ?StatsRange $range = null
     return test()->getJson(route('rotators.destinations.chart', $parameters));
 }
 
-/**
- * Record clicks against a destination at a given moment.
- */
-function clicksAt(TrafficRotatorDestination $destination, string $moment, int $count = 1): Collection
-{
-    return TrafficRotatorClick::factory()
-        ->count($count)
-        ->forDestination($destination)
-        ->at(CarbonImmutable::parse($moment, 'UTC'))
-        ->create();
-}
-
 test('returns 401 without a token', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
 
     $this->getJson(route('rotators.destinations.chart', [$destination->rotator, $destination]))
         ->assertUnauthorized();
 });
 
 test('returns 404 for another user rotator', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
 
     Sanctum::actingAs(User::factory()->create());
     $response = $this->getJson(route('rotators.destinations.chart', [$destination->rotator, $destination]));
@@ -74,7 +49,7 @@ test('returns 404 for another user rotator', function () {
 });
 
 test('returns 404 for a destination belonging to a different rotator', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     $sibling = TrafficRotator::factory()->for($destination->rotator->user)->create();
 
     Sanctum::actingAs($destination->rotator->user);
@@ -84,7 +59,7 @@ test('returns 404 for a destination belonging to a different rotator', function 
 });
 
 test('returns 422 for an unknown range', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
 
     Sanctum::actingAs($destination->rotator->user);
     $response = $this->getJson(route('rotators.destinations.chart', [
@@ -95,7 +70,7 @@ test('returns 422 for an unknown range', function () {
 });
 
 test('falls back to the last 30 days when no range is given', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
 
     $response = chart($destination);
 
@@ -107,71 +82,16 @@ test('falls back to the last 30 days when no range is given', function () {
         ->assertJsonPath('data.destination.uuid', $destination->uuid);
 });
 
-test('counts only the clicks inside the selected range', function () {
-    $destination = chartDestination();
-    clicksAt($destination, '2026-08-10 10:00:00', 3);
-    clicksAt($destination, '2026-07-10 10:00:00');
-    clicksAt($destination, '2026-05-01 10:00:00');
+test('leaves the headline figures to the stats endpoint', function () {
+    $destination = reportDestination();
 
-    $response = chart($destination, StatsRange::LAST_30_DAYS);
+    $response = chart($destination);
 
-    $response->assertJsonPath('data.kpis.clicks_received.value', 3)
-        ->assertJsonPath('data.kpis.clicks_received.previous_value', 1)
-        ->assertJsonPath('data.kpis.clicks_received.indicator.position', 'up');
-});
-
-test('counts a repeat visitor once', function () {
-    $destination = chartDestination();
-    TrafficRotatorClick::factory()->count(3)->forDestination($destination)
-        ->at(CarbonImmutable::parse('2026-08-10 10:00:00', 'UTC'))
-        ->fromVisitor('aaaabbbbccccddddeeeeffff00001111')
-        ->create();
-    clicksAt($destination, '2026-08-11 10:00:00');
-
-    $response = chart($destination, StatsRange::LAST_30_DAYS);
-
-    $response->assertJsonPath('data.kpis.clicks_received.value', 4)
-        ->assertJsonPath('data.kpis.unique_visitors.value', 2);
-});
-
-test('counts traffic received across the whole rotator', function () {
-    $destination = chartDestination();
-    $sibling = TrafficRotatorDestination::factory()->forRotator($destination->rotator)->create();
-    clicksAt($destination, '2026-08-10 10:00:00', 3);
-    clicksAt($sibling, '2026-08-10 11:00:00', 5);
-
-    $response = chart($destination, StatsRange::LAST_30_DAYS);
-
-    $response->assertJsonPath('data.kpis.clicks_received.value', 3)
-        ->assertJsonPath('data.kpis.traffic_received.value', 8);
-});
-
-test('ignores rotator traffic from before the destination existed', function () {
-    $destination = chartDestination('2026-08-20 00:00:00');
-    $sibling = TrafficRotatorDestination::factory()->forRotator($destination->rotator)->create();
-    clicksAt($sibling, '2026-08-01 10:00:00', 4);
-    clicksAt($sibling, '2026-08-22 10:00:00', 2);
-    clicksAt($destination, '2026-08-22 11:00:00');
-
-    $response = chart($destination, StatsRange::LAST_30_DAYS);
-
-    $response->assertJsonPath('data.kpis.traffic_received.value', 3);
-});
-
-test('excludes bot clicks but keeps unclassified ones', function () {
-    $destination = chartDestination();
-    $moment = CarbonImmutable::parse('2026-08-10 10:00:00', 'UTC');
-    TrafficRotatorClick::factory()->count(2)->forDestination($destination)->at($moment)->create();
-    TrafficRotatorClick::factory()->forDestination($destination)->at($moment)->bot()->create();
-    TrafficRotatorClick::factory()->forDestination($destination)->at($moment)->unclassified()->create();
-
-    $response = chart($destination, StatsRange::LAST_30_DAYS);
-
-    $response->assertJsonPath('data.kpis.clicks_received.value', 3);
+    $response->assertJsonMissingPath('data.kpis');
 });
 
 test('zero fills the buckets with no clicks', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     clicksAt($destination, '2026-08-25 10:00:00', 2);
 
     $response = chart($destination, StatsRange::LAST_7_DAYS);
@@ -182,7 +102,7 @@ test('zero fills the buckets with no clicks', function () {
 });
 
 test('buckets by the hour for today', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     clicksAt($destination, '2026-08-27 09:15:00', 2);
 
     $response = chart($destination, StatsRange::TODAY);
@@ -194,7 +114,7 @@ test('buckets by the hour for today', function () {
 });
 
 test('buckets by the month for this year', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     clicksAt($destination, '2026-03-14 10:00:00', 3);
     clicksAt($destination, '2026-08-02 10:00:00');
 
@@ -208,7 +128,7 @@ test('buckets by the month for this year', function () {
 });
 
 test('files a weekly bucket under the monday that opened the week', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     clicksAt($destination, '2026-08-12 10:00:00', 2);
 
     $response = chart($destination, StatsRange::LAST_6_MONTHS);
@@ -223,20 +143,20 @@ test('files a weekly bucket under the monday that opened the week', function () 
         ->and($series->sum('clicks'))->toBe(2);
 });
 
-test('reports a flat indicator with no rate for all time', function () {
-    $destination = chartDestination('2026-05-12 00:00:00');
-    clicksAt($destination, '2026-06-01 10:00:00', 4);
+test('excludes bot clicks from the series but keeps unclassified ones', function () {
+    $destination = reportDestination();
+    $moment = CarbonImmutable::parse('2026-08-25 10:00:00', 'UTC');
+    TrafficRotatorClick::factory()->count(2)->forDestination($destination)->at($moment)->create();
+    TrafficRotatorClick::factory()->forDestination($destination)->at($moment)->bot()->create();
+    TrafficRotatorClick::factory()->forDestination($destination)->at($moment)->unclassified()->create();
 
-    $response = chart($destination, StatsRange::ALL_TIME);
+    $response = chart($destination, StatsRange::LAST_7_DAYS);
 
-    $response->assertJsonPath('data.kpis.clicks_received.value', 4)
-        ->assertJsonPath('data.kpis.clicks_received.previous_value', 0)
-        ->assertJsonPath('data.kpis.clicks_received.indicator.position', 'flat')
-        ->assertJsonPath('data.kpis.clicks_received.indicator.rate', null);
+    $response->assertJsonPath('data.series.4.clicks', 3);
 });
 
 test('reports the click through rate against the rotator traffic', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     $sibling = TrafficRotatorDestination::factory()->forRotator($destination->rotator)->create();
     clicksAt($destination, '2026-08-10 10:00:00', 3);
     clicksAt($sibling, '2026-08-10 11:00:00', 5);
@@ -248,7 +168,7 @@ test('reports the click through rate against the rotator traffic', function () {
 });
 
 test('averages the clicks over the days in the range', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     clicksAt($destination, '2026-08-10 10:00:00', 3);
 
     $response = chart($destination, StatsRange::LAST_30_DAYS);
@@ -258,7 +178,7 @@ test('averages the clicks over the days in the range', function () {
 });
 
 test('reports the leading device as a share of the visitors', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     $moment = CarbonImmutable::parse('2026-08-10 10:00:00', 'UTC');
     TrafficRotatorClick::factory()->count(5)->forDestination($destination)->at($moment)
         ->device(DeviceType::DESKTOP)->create();
@@ -274,7 +194,7 @@ test('reports the leading device as a share of the visitors', function () {
 });
 
 test('reports a null country while nothing populates one', function () {
-    $destination = chartDestination();
+    $destination = reportDestination();
     TrafficRotatorClick::factory()->count(2)->forDestination($destination)
         ->at(CarbonImmutable::parse('2026-08-10 10:00:00', 'UTC'))
         ->fromCountry(null)
@@ -283,12 +203,4 @@ test('reports a null country while nothing populates one', function () {
     $response = chart($destination, StatsRange::LAST_30_DAYS);
 
     $response->assertJsonPath('data.tiles.top_country', ['name' => null, 'visitor_rate' => null]);
-});
-
-test('reports how long the destination has been active', function () {
-    $destination = chartDestination('2026-05-12 00:00:00');
-
-    $response = chart($destination, StatsRange::LAST_30_DAYS);
-
-    $response->assertJsonPath('data.kpis.active_since', ['date' => '2026-05-12', 'days' => 107]);
 });

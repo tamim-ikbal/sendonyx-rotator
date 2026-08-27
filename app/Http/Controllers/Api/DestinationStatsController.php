@@ -3,23 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\TrafficRotator\DestinationChartRequest;
+use App\Http\Requests\TrafficRotator\DestinationStatsRequest;
 use App\Http\Resources\TrafficRotatorDestinationResource;
 use App\Models\TrafficRotator;
 use App\Models\TrafficRotatorDestination;
 use App\Support\Stats\DestinationStatsBuilder;
 use Illuminate\Http\JsonResponse;
 
-class DestinationChartController extends Controller
+class DestinationStatsController extends Controller
 {
     /**
-     * Serve the timeline a destination's dashboard chart plots.
-     *
-     * The headline figures live on the stats endpoint, which opens on a
-     * different window; this one carries only what the chart draws.
+     * Serve the headline figures a destination's dashboard panel shows.
      */
     public function __invoke(
-        DestinationChartRequest $request,
+        DestinationStatsRequest $request,
         TrafficRotator $rotator,
         TrafficRotatorDestination $destination,
         DestinationStatsBuilder $stats,
@@ -27,7 +24,7 @@ class DestinationChartController extends Controller
         return new JsonResponse([
             'data' => [
                 'destination' => TrafficRotatorDestinationResource::make($destination),
-                ...$stats->chart($destination, $request->statsRange()),
+                ...$stats->stats($destination, $request->statsRange()),
             ],
         ]);
     }
