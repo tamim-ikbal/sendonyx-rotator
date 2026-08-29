@@ -30,6 +30,11 @@ class UpdateDestinationRequest extends FormRequest
     {
         return [
             'url' => ['sometimes', 'required', ...$this->outboundUrlRules()],
+            // No `required` beside `sometimes` here, unlike the fields above:
+            // sending an explicit null is the only way to detach a destination
+            // from its plan or its customer.
+            'plan_uid' => ['sometimes', ...$this->externalUidRules()],
+            'customer_uid' => ['sometimes', ...$this->externalUidRules()],
             'weight' => ['sometimes', 'required', ...$this->destinationWeightRules()],
             'status' => ['sometimes', 'required', ...$this->destinationStatusRules()],
         ];

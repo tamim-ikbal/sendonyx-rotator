@@ -33,6 +33,8 @@ class StoreDestinationRequest extends FormRequest
     {
         return [
             'url' => ['required', ...$this->outboundUrlRules()],
+            'plan_uid' => ['sometimes', ...$this->externalUidRules()],
+            'customer_uid' => ['sometimes', ...$this->externalUidRules()],
             'weight' => ['sometimes', ...$this->destinationWeightRules()],
             'status' => ['sometimes', ...$this->destinationStatusRules()],
         ];

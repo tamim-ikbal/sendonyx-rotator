@@ -16,6 +16,8 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $rotator_id
  * @property int|null $destination_id
+ * @property string|null $plan_uid
+ * @property string|null $customer_uid
  * @property string $visitor_id
  * @property string $ip_hash
  * @property string|null $user_agent
@@ -28,6 +30,8 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'rotator_id',
     'destination_id',
+    'plan_uid',
+    'customer_uid',
     'visitor_id',
     'ip_hash',
     'user_agent',

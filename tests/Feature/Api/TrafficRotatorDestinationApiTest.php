@@ -34,6 +34,54 @@ test('adds a destination inheriting the owner of the rotator', function () {
     ]);
 });
 
+test('stores the plan and customer a destination is attributed to', function () {
+    $user = User::factory()->create();
+    $rotator = TrafficRotator::factory()->for($user)->create();
+
+    Sanctum::actingAs($user);
+    $response = $this->postJson(route('rotators.destinations.store', $rotator), [
+        'url' => 'https://offers.example.com/one',
+        'plan_uid' => 'plan_pro',
+        'customer_uid' => 'cus_4b7e',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.plan_uid', 'plan_pro')
+        ->assertJsonPath('data.customer_uid', 'cus_4b7e');
+    $this->assertDatabaseHas('traffic_rotator_destinations', [
+        'rotator_id' => $rotator->id,
+        'plan_uid' => 'plan_pro',
+        'customer_uid' => 'cus_4b7e',
+    ]);
+});
+
+test('leaves the plan and customer null when neither is sent', function () {
+    $user = User::factory()->create();
+    $rotator = TrafficRotator::factory()->for($user)->create();
+
+    Sanctum::actingAs($user);
+    $response = $this->postJson(route('rotators.destinations.store', $rotator), [
+        'url' => 'https://offers.example.com/one',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.plan_uid', null)
+        ->assertJsonPath('data.customer_uid', null);
+});
+
+test('returns 422 for an identifier longer than the column', function (string $field) {
+    $user = User::factory()->create();
+    $rotator = TrafficRotator::factory()->for($user)->create();
+
+    Sanctum::actingAs($user);
+    $response = $this->postJson(route('rotators.destinations.store', $rotator), [
+        'url' => 'https://offers.example.com/one',
+        $field => str_repeat('a', 256),
+    ]);
+
+    $response->assertUnprocessable()->assertJsonValidationErrors($field);
+})->with(['plan_uid', 'customer_uid']);
+
 test('defaults a new destination to weight one', function () {
     $user = User::factory()->create();
     $rotator = TrafficRotator::factory()->for($user)->create();
@@ -149,6 +197,38 @@ test('updates only the fields the caller sends', function () {
     expect($destination->refresh())
         ->weight->toBe(3)
         ->url->toBe('https://offers.example.com/one');
+});
+
+test('reattributes a destination to another plan', function () {
+    $user = User::factory()->create();
+    $rotator = TrafficRotator::factory()->for($user)->create();
+    $destination = TrafficRotatorDestination::factory()->forRotator($rotator)
+        ->forPlan('plan_starter')->forCustomer('cus_4b7e')->create();
+
+    Sanctum::actingAs($user);
+    $response = $this->patchJson(route('rotators.destinations.update', [$rotator, $destination]), [
+        'plan_uid' => 'plan_pro',
+    ]);
+
+    $response->assertOk()->assertJsonPath('data.plan_uid', 'plan_pro');
+    expect($destination->refresh())
+        ->plan_uid->toBe('plan_pro')
+        ->customer_uid->toBe('cus_4b7e');
+});
+
+test('detaches a destination from its plan when sent an explicit null', function () {
+    $user = User::factory()->create();
+    $rotator = TrafficRotator::factory()->for($user)->create();
+    $destination = TrafficRotatorDestination::factory()->forRotator($rotator)
+        ->forPlan('plan_starter')->create();
+
+    Sanctum::actingAs($user);
+    $response = $this->patchJson(route('rotators.destinations.update', [$rotator, $destination]), [
+        'plan_uid' => null,
+    ]);
+
+    $response->assertOk()->assertJsonPath('data.plan_uid', null);
+    expect($destination->refresh()->plan_uid)->toBeNull();
 });
 
 test('returns 404 when updating a destination of another user rotator', function () {

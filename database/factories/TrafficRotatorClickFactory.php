@@ -25,6 +25,11 @@ class TrafficRotatorClickFactory extends Factory
         return [
             'rotator_id' => TrafficRotator::factory(),
             'destination_id' => TrafficRotatorDestination::factory(),
+            // Stamped from the destination by forDestination(), the way the
+            // recording job stamps them. Unattributed by default, which is
+            // what a fallback hit looks like.
+            'plan_uid' => null,
+            'customer_uid' => null,
             'visitor_id' => bin2hex(random_bytes(16)),
             'ip_hash' => hash('sha256', fake()->ipv4()),
             'user_agent' => fake()->userAgent(),
@@ -38,12 +43,34 @@ class TrafficRotatorClickFactory extends Factory
 
     /**
      * Indicate that the click belongs to the given destination and its rotator.
+     *
+     * The attribution is copied off the destination here for the same reason
+     * the job copies it: a click carries the plan and customer that were true
+     * when it was served, so a factory that left them null would not produce
+     * the rows the breakdowns actually read.
      */
     public function forDestination(TrafficRotatorDestination $destination): static
     {
         return $this->state(fn (array $attributes): array => [
             'rotator_id' => $destination->rotator_id,
             'destination_id' => $destination->id,
+            'plan_uid' => $destination->plan_uid,
+            'customer_uid' => $destination->customer_uid,
+        ]);
+    }
+
+    /**
+     * Indicate the attribution the click was stamped with, whatever its
+     * destination carries now.
+     *
+     * This is how a test builds history that the destination has since moved
+     * away from, which is the whole point of stamping.
+     */
+    public function attributedTo(?string $planUid, ?string $customerUid = null): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'plan_uid' => $planUid,
+            'customer_uid' => $customerUid,
         ]);
     }
 

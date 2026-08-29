@@ -81,6 +81,21 @@ trait RotatorValidationRules
     }
 
     /**
+     * Get the validation rules used to validate an external identifier.
+     *
+     * `plan_uid` and `customer_uid` are opaque handles minted elsewhere, so
+     * nothing is asserted about their shape beyond the column ceiling. They
+     * are nullable on purpose: clearing one is how a destination stops being
+     * attributed to a plan or a seat.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function externalUidRules(): array
+    {
+        return ['nullable', 'string', 'max:255'];
+    }
+
+    /**
      * Get the validation rules used to validate destination weights.
      *
      * The ceiling is the number of priority tiers the dashboard offers, not an

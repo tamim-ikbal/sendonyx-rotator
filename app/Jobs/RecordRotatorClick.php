@@ -49,13 +49,20 @@ class RecordRotatorClick implements ShouldQueue
      */
     public function handle(DeviceTypeResolver $devices): void
     {
-        if (! $this->parentsStillExist()) {
+        if (! TrafficRotator::query()->whereKey($this->rotatorId)->exists()) {
+            return;
+        }
+
+        $attribution = $this->attribution();
+
+        if ($attribution === null) {
             return;
         }
 
         TrafficRotatorClick::query()->create([
             'rotator_id' => $this->rotatorId,
             'destination_id' => $this->destinationId,
+            ...$attribution,
             'visitor_id' => $this->visitorId,
             'ip_hash' => $this->ipHash,
             'user_agent' => $this->userAgent,
@@ -65,19 +72,40 @@ class RecordRotatorClick implements ShouldQueue
     }
 
     /**
-     * Determine whether the rotator, and the destination if there was one, remain.
+     * Read the plan and customer to stamp on this click.
+     *
+     * Stamping is what makes the traffic breakdowns point in time: the click
+     * keeps the attribution the destination had when it was served, so
+     * reassigning a destination later cannot move history off the plan that
+     * earned it.
+     *
+     * This doubles as the destination's existence check, which is why it costs
+     * nothing: the same primary key lookup that used to return a boolean now
+     * returns the two values as well. A null return means the destination is
+     * gone and the click must not be written.
+     *
+     * @return array{plan_uid: string|null, customer_uid: string|null}|null
      */
-    private function parentsStillExist(): bool
+    private function attribution(): ?array
     {
-        if (! TrafficRotator::query()->whereKey($this->rotatorId)->exists()) {
-            return false;
-        }
-
+        // A fallback hit had no destination to inherit from, so it is recorded
+        // unattributed rather than rejected.
         if ($this->destinationId === null) {
-            return true;
+            return ['plan_uid' => null, 'customer_uid' => null];
         }
 
-        return TrafficRotatorDestination::query()->whereKey($this->destinationId)->exists();
+        $destination = TrafficRotatorDestination::query()
+            ->whereKey($this->destinationId)
+            ->first(['plan_uid', 'customer_uid']);
+
+        if ($destination === null) {
+            return null;
+        }
+
+        return [
+            'plan_uid' => $destination->plan_uid,
+            'customer_uid' => $destination->customer_uid,
+        ];
     }
 
     /**

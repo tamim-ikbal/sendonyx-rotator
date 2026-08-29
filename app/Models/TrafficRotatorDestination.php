@@ -22,13 +22,15 @@ use Illuminate\Support\Carbon;
  * @property int $rotator_id
  * @property int $user_id
  * @property string $url
+ * @property string|null $plan_uid
+ * @property string|null $customer_uid
  * @property int $weight
  * @property DestinationStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read int|null $clicks_count
  */
-#[Fillable(['url', 'weight', 'status'])]
+#[Fillable(['url', 'plan_uid', 'customer_uid', 'weight', 'status'])]
 #[ObservedBy(TrafficRotatorDestinationObserver::class)]
 class TrafficRotatorDestination extends Model
 {

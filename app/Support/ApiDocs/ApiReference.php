@@ -54,7 +54,27 @@ final readonly class ApiReference
                 'GET',
                 'api/rotators/{rotator}',
                 'Get a rotator',
-                'Returns the rotator with its destinations embedded. This is the only way to enumerate destinations: there is no destination index.',
+                'Returns the rotator with its destinations embedded, plus total_clicks and unique_visitors for its whole lifetime. This is the only way to enumerate destinations: there is no destination index.',
+                [
+                    ApiParameter::path('rotator', 'The rotator uuid.'),
+                ],
+            ),
+            new ApiEndpoint(
+                'rotators.traffic-by-plans',
+                'GET',
+                'api/rotators/{rotator}/traffic-by-plans',
+                'Get traffic by plan',
+                'Lifetime clicks totalled per plan_uid, busiest first. Attribution is stamped on each click when it is recorded, so these are the clicks a plan earned: moving a destination to another plan does not move its history. Clicks recorded while their destination had no plan_uid are left out rather than collected under a null key, and so are the fallback hits that had no destination at all.',
+                [
+                    ApiParameter::path('rotator', 'The rotator uuid.'),
+                ],
+            ),
+            new ApiEndpoint(
+                'rotators.traffic-by-members',
+                'GET',
+                'api/rotators/{rotator}/traffic-by-members',
+                'Get traffic by member',
+                'Lifetime clicks totalled per customer_uid, busiest first. Stamped at record time and excluded on a null exactly as the plan breakdown is.',
                 [
                     ApiParameter::path('rotator', 'The rotator uuid.'),
                 ],
@@ -77,6 +97,8 @@ final readonly class ApiReference
                 [
                     ApiParameter::path('rotator', 'The rotator uuid.'),
                     ApiParameter::body('url', 'url', true, 'Where the visitor is sent. http or https only, up to 2048 characters.', 'https://example.com/offer-a'),
+                    ApiParameter::body('plan_uid', 'string', false, 'The plan this destination is provisioned under, up to 255 characters. Opaque to the rotator: it is stamped onto each click the destination serves, and only grouped by. Optional.', 'plan_9f2a'),
+                    ApiParameter::body('customer_uid', 'string', false, 'The customer this destination belongs to, up to 255 characters. Optional.', 'cus_4b7e'),
                     ApiParameter::body('weight', 'integer', false, 'The priority tier, 1 to 3. Traffic is split in proportion to weight. Defaults to 1.', '1'),
                     ApiParameter::body('status', 'enum', false, 'A paused destination takes no traffic. Defaults to active.', null, $this->valuesOf(DestinationStatus::cases())),
                 ],
@@ -102,6 +124,8 @@ final readonly class ApiReference
                     ApiParameter::path('rotator', 'The rotator uuid.'),
                     ApiParameter::path('destination', 'The destination uuid.'),
                     ApiParameter::body('url', 'url', false, 'http or https only, up to 2048 characters.', 'https://example.com/offer-b'),
+                    ApiParameter::body('plan_uid', 'string', false, 'Send null to detach the destination from its plan. Clicks already recorded keep the plan they were stamped with.', 'plan_9f2a'),
+                    ApiParameter::body('customer_uid', 'string', false, 'Send null to detach the destination from its customer. Clicks already recorded keep the customer they were stamped with.', 'cus_4b7e'),
                     ApiParameter::body('weight', 'integer', false, 'The priority tier, 1 to 3.', '2'),
                     ApiParameter::body('status', 'enum', false, 'A paused destination takes no traffic.', null, $this->valuesOf(DestinationStatus::cases())),
                 ],

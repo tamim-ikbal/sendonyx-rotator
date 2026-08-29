@@ -24,6 +24,10 @@ class TrafficRotatorDestinationFactory extends Factory
             'rotator_id' => TrafficRotator::factory(),
             'user_id' => User::factory(),
             'url' => fake()->url(),
+            // Both stay null by default: they are set by whatever provisions
+            // the destination, and most tests have no plan or seat in play.
+            'plan_uid' => null,
+            'customer_uid' => null,
             'weight' => 1,
             'status' => DestinationStatus::ACTIVE,
         ];
@@ -46,6 +50,26 @@ class TrafficRotatorDestinationFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'weight' => $weight,
+        ]);
+    }
+
+    /**
+     * Indicate the plan the destination was provisioned under.
+     */
+    public function forPlan(?string $planUid): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'plan_uid' => $planUid,
+        ]);
+    }
+
+    /**
+     * Indicate the customer the destination belongs to.
+     */
+    public function forCustomer(?string $customerUid): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'customer_uid' => $customerUid,
         ]);
     }
 

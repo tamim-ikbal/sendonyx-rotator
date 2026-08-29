@@ -21,6 +21,8 @@ class TrafficRotatorDestinationResource extends JsonResource
         return [
             'uuid' => $this->uuid,
             'url' => $this->url,
+            'plan_uid' => $this->plan_uid,
+            'customer_uid' => $this->customer_uid,
             'weight' => $this->weight,
             'status' => $this->status->value,
             'created_at' => $this->created_at?->toIso8601String(),
