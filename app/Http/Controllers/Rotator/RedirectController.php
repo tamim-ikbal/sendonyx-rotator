@@ -37,13 +37,19 @@ final class RedirectController extends Controller
 
         $visitorId = $this->visitors->resolve($request);
 
+        // Everything here is read off the request and nothing is derived from
+        // it: device parsing and the country lookup both belong to the job. The
+        // CDN's country header is the one exception that has to be collected
+        // now, because it exists only on the request, and reading it is a
+        // string lookup rather than work.
         RecordRotatorClick::dispatch(
             $decision->rotatorId,
             $decision->destinationId,
             $visitorId,
-            $this->visitors->hashIp($request),
+            $request->ip(),
             $request->userAgent(),
             $request->headers->get('referer'),
+            $request->headers->get(config()->string('rotator.geo.header')),
         );
 
         // A cached redirect would serve one visitor's destination to everybody

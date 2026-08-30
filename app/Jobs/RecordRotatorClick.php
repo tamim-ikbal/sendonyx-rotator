@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\TrafficRotator;
 use App\Models\TrafficRotatorClick;
 use App\Models\TrafficRotatorDestination;
+use App\Support\Geo\CountryResolver;
 use App\Support\UserAgent\DeviceTypeResolver;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -15,6 +16,11 @@ use Illuminate\Foundation\Queue\Queueable;
  * The payload is scalars only, and deliberately so. SerializesModels would
  * store model keys and re-query them when the worker unserializes the job,
  * turning one asynchronous insert back into several synchronous reads.
+ *
+ * Everything that costs more than reading a request header is done here rather
+ * than in the controller, so the redirect is a rotation decision and nothing
+ * else: user agent parsing, and the country lookup for any hit whose country
+ * the CDN did not already state.
  */
 class RecordRotatorClick implements ShouldQueue
 {
@@ -32,9 +38,10 @@ class RecordRotatorClick implements ShouldQueue
         public readonly int $rotatorId,
         public readonly ?int $destinationId,
         public readonly string $visitorId,
-        public readonly string $ipHash,
+        public readonly ?string $ipAddress,
         public readonly ?string $userAgent,
         public readonly ?string $referrer,
+        public readonly ?string $cdnCountry = null,
     ) {
         $this->onQueue(config()->string('rotator.queue'));
     }
@@ -47,7 +54,7 @@ class RecordRotatorClick implements ShouldQueue
      * clicks with it through the foreign keys, so writing the row would either
      * fail outright or resurrect history that was meant to be gone.
      */
-    public function handle(DeviceTypeResolver $devices): void
+    public function handle(DeviceTypeResolver $devices, CountryResolver $countries): void
     {
         if (! TrafficRotator::query()->whereKey($this->rotatorId)->exists()) {
             return;
@@ -64,9 +71,10 @@ class RecordRotatorClick implements ShouldQueue
             'destination_id' => $this->destinationId,
             ...$attribution,
             'visitor_id' => $this->visitorId,
-            'ip_hash' => $this->ipHash,
+            'ip_address' => $this->ipAddress,
             'user_agent' => $this->userAgent,
             'device_type' => $devices->resolve($this->userAgent),
+            'visitor_country' => $countries->resolve($this->cdnCountry, $this->ipAddress),
             'referrer' => $this->truncatedReferrer(),
         ]);
     }

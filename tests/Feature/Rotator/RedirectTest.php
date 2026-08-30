@@ -197,20 +197,64 @@ test('gives two cookieless hits from one visitor the same identity for a day', f
         ->and($identities[2])->not->toBe($identities[0]);
 });
 
-test('stores the visitor ip only as a hash', function () {
+test('stores the address the visitor connected from', function () {
     $rotator = TrafficRotator::factory()->create();
     TrafficRotatorDestination::factory()->forRotator($rotator)->create();
 
     hitRotator(['REMOTE_ADDR' => '203.0.113.9']);
     hitRotator(['REMOTE_ADDR' => '198.51.100.4']);
 
-    $hashes = TrafficRotatorClick::query()->orderBy('id')->pluck('ip_hash')->all();
+    $addresses = TrafficRotatorClick::query()->orderBy('id')->pluck('ip_address')->all();
 
-    expect($hashes[0])->toMatch('/^[0-9a-f]{64}$/')
-        ->and($hashes[0])->not->toContain('203.0.113.9')
-        ->and($hashes[0])->not->toBe($hashes[1]);
+    expect($addresses)->toBe(['203.0.113.9', '198.51.100.4']);
+});
 
-    $this->assertDatabaseMissing('traffic_rotator_clicks', ['ip_hash' => '203.0.113.9']);
+test('records the address a trusted cdn forwarded rather than one the visitor forged', function () {
+    $rotator = TrafficRotator::factory()->create();
+    TrafficRotatorDestination::factory()->forRotator($rotator)->create();
+
+    // Cloudflare appends the connecting address to whatever the visitor sent,
+    // so a forged entry arrives ahead of the real one. Trusting the edge range
+    // and nothing wider is what makes the real one win: with every proxy
+    // trusted there is no untrusted hop to stop at and the forged address is
+    // what gets recorded. Do not relax this to '*'.
+    config(['trustedproxy.proxies' => '162.158.0.0/15']);
+
+    hitRotator([
+        'REMOTE_ADDR' => '162.158.10.5',
+        'X-Forwarded-For' => '1.2.3.4, 203.0.113.77',
+    ]);
+
+    expect(TrafficRotatorClick::query()->sole()->ip_address)->toBe('203.0.113.77');
+});
+
+test('records the country the cdn resolved on the edge', function () {
+    $rotator = TrafficRotator::factory()->create();
+    TrafficRotatorDestination::factory()->forRotator($rotator)->create();
+
+    hitRotator(['REMOTE_ADDR' => '203.0.113.9', 'CF-IPCountry' => 'de']);
+
+    expect(TrafficRotatorClick::query()->sole()->visitor_country)->toBe('DE');
+});
+
+test('records no country for a visitor nothing places', function () {
+    $rotator = TrafficRotator::factory()->create();
+    TrafficRotatorDestination::factory()->forRotator($rotator)->create();
+
+    // A reserved range, so this stays null whether or not the machine running
+    // the suite has a country database fetched.
+    hitRotator(['REMOTE_ADDR' => '203.0.113.9']);
+
+    expect(TrafficRotatorClick::query()->sole()->visitor_country)->toBeNull();
+});
+
+test('ignores a country header a visitor forged for themselves', function () {
+    $rotator = TrafficRotator::factory()->create();
+    TrafficRotatorDestination::factory()->forRotator($rotator)->create();
+
+    hitRotator(['REMOTE_ADDR' => '203.0.113.9', 'CF-IPCountry' => "Germany'--"]);
+
+    expect(TrafficRotatorClick::query()->sole()->visitor_country)->toBeNull();
 });
 
 test('rotates a bot and records it as one', function () {

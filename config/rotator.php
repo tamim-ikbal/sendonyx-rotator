@@ -54,4 +54,23 @@ return [
 
     'queue' => env('ROTATOR_QUEUE', 'default'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Visitor Country
+    |--------------------------------------------------------------------------
+    |
+    | Country is resolved by the recording job, never on the redirect. A CDN in
+    | front of the rotator states the country in a header it sets on the edge,
+    | which the redirect passes through untouched; anything arriving without
+    | one falls back to the local database file named here. That file is
+    | licensed and several megabytes, so it is fetched rather than committed,
+    | and an environment without it simply records no country.
+    |
+    */
+
+    'geo' => [
+        'header' => env('ROTATOR_COUNTRY_HEADER', 'CF-IPCountry'),
+        'database' => env('ROTATOR_GEO_DATABASE', storage_path('app/geoip/dbip-country-lite.mmdb')),
+    ],
+
 ];

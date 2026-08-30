@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Support\Geo\CountryDatabase;
+use App\Support\Geo\MaxMindCountryDatabase;
+use App\Support\Geo\NullCountryDatabase;
 use App\Support\Rotation\CacheRotationStateStore;
 use App\Support\Rotation\RedisRotationStateStore;
 use App\Support\Rotation\RotationStateStore;
@@ -16,6 +19,8 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use MaxMind\Db\Reader;
+use MaxMind\Db\Reader\InvalidDatabaseException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->registerRotationStateStore();
         $this->registerRotatorCache();
         $this->registerVisitorIdentity();
+        $this->registerCountryDatabase();
     }
 
     /**
@@ -98,6 +104,39 @@ class AppServiceProvider extends ServiceProvider
                 config()->string('rotator.cookie.name'),
                 config()->integer('rotator.cookie.days'),
             );
+        });
+    }
+
+    /**
+     * Bind the country database the click recording job falls back to.
+     *
+     * The file is licensed and several megabytes, so it is fetched per
+     * environment rather than committed, and a fresh checkout or a CI runner
+     * legitimately has none. That is not an error: country then comes from the
+     * CDN header alone and anything arriving another way is recorded without
+     * one, which the statistics layer already reads as unclassified.
+     *
+     * An unreadable file is treated the same way rather than thrown, because a
+     * half written monthly refresh must not stop a worker recording clicks.
+     *
+     * Bound as a singleton so a long running worker memory maps the file once
+     * and every lookup after that is a tree walk. The flip side is that a
+     * worker holds its open file across a refresh: `queue:restart` after one.
+     */
+    protected function registerCountryDatabase(): void
+    {
+        $this->app->singleton(CountryDatabase::class, function (): CountryDatabase {
+            $database = config()->string('rotator.geo.database');
+
+            if (! is_file($database)) {
+                return new NullCountryDatabase;
+            }
+
+            try {
+                return new MaxMindCountryDatabase(new Reader($database));
+            } catch (InvalidDatabaseException) {
+                return new NullCountryDatabase;
+            }
         });
     }
 

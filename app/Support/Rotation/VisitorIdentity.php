@@ -9,9 +9,10 @@ use Symfony\Component\HttpFoundation\Cookie;
 /**
  * The pseudonymous identity a click is attributed to.
  *
- * Both values this produces are keyed HMACs rather than the underlying request
- * data: the raw IP address is never written to the database or to a queue
- * payload, and the visitor id is opaque to anyone without the application key.
+ * The visitor id is a keyed HMAC of the request rather than the request data
+ * itself, so it is opaque to anyone without the application key and cannot be
+ * walked back to a person. The address it is derived from is a separate matter:
+ * the recording job stores that on the click in its own right.
  */
 final readonly class VisitorIdentity
 {
@@ -44,14 +45,6 @@ final readonly class VisitorIdentity
         }
 
         return $this->fingerprint($request);
-    }
-
-    /**
-     * Hash the request's IP address for storage.
-     */
-    public function hashIp(Request $request): string
-    {
-        return hash_hmac('sha256', (string) $request->ip(), $this->key);
     }
 
     /**

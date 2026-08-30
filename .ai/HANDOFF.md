@@ -57,8 +57,9 @@ application obtains credentials.
 | Fallback clicks | Logged with `destination_id` NULL so leaked traffic stays visible. |
 | Redirect | `302` + `Cache-Control: no-store` (a cacheable redirect breaks rotation). |
 | `visitor_id` | `rotator_vid` cookie (32 hex, 1 yr); HMAC(ip+ua+date) fallback when blocked. |
-| IP | Stored only as HMAC (`ip_hash`). Raw IP never persisted. |
-| Country | **Deferred.** Column nullable, nothing populates it. |
+| IP | Stored raw in `ip_address`. Replaced `ip_hash` on 2026-08-31: nothing read the hash, and the address is needed to geolocate a click. |
+| Country | CDN header (`CF-IPCountry`) first, local DB-IP Lite `.mmdb` as fallback. Resolved **in the job**, never on the redirect. Null when neither places the hit. |
+| Trusted proxies | `TRUSTED_PROXIES` (`config/trustedproxy.php`). Empty by default — set it behind a CDN or every click geolocates to the edge. |
 | Device | `device_type` column, parsed in the job by `matomo/device-detector`. |
 | Bots | Logged and rotated, **excluded from stats** via a `WHERE` clause. |
 | Auth | **Sanctum tokens** on `routes/api.php`. `HasApiTokens` already added to `User`. |
@@ -81,12 +82,14 @@ application obtains credentials.
 - **Active Since** — `destination.created_at` plus a day count.
 - **Click Through Rate** — Clicks Received ÷ Traffic Received. Reveals weight under-delivery.
 - **Avg Daily Clicks** — clicks ÷ days in range.
-- **Top Country / Top Device** — `{name, visitor_rate}`. Country stays null until geo lands.
+- **Top Country / Top Device** — `{name, visitor_rate}`.
 
 ### Out of scope
 
-Network Stats panel, Recent Promotional Emails, Plan Usage & Summary, Your Rotator Spot, country
-detection, destination `index` endpoint, any `DELETE` endpoint, the rotator dashboard UI.
+Network Stats panel, Recent Promotional Emails, Plan Usage & Summary, Your Rotator Spot,
+destination `index` endpoint, any `DELETE` endpoint, the rotator dashboard UI.
+
+Country detection was out of scope here and landed on 2026-08-31; see the row above.
 
 ---
 
@@ -213,7 +216,8 @@ CI was **already red** before this work started. Now 0 PHPStan errors.
 
 ### Phase 1 — schema
 
-- `composer require matomo/device-detector` (^6.5) — the one approved new dependency.
+- `composer require matomo/device-detector` (^6.5) — an approved new dependency.
+  `maxmind-db/reader` (^1.13) was approved later, for country detection.
 - `app/Enums/`: `RotatorStatus`, `DestinationStatus`, `DeviceType`, `IndicatorPosition`,
   `Granularity` (carries `keyFor`/`startOf`/`advance`), `StatsRange` (carries
   `granularity()`/`hasBaseline()`).

@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $plan_uid
  * @property string|null $customer_uid
  * @property string $visitor_id
- * @property string $ip_hash
+ * @property string|null $ip_address
  * @property string|null $user_agent
  * @property DeviceType|null $device_type
  * @property string|null $visitor_country
@@ -33,7 +33,7 @@ use Illuminate\Support\Carbon;
     'plan_uid',
     'customer_uid',
     'visitor_id',
-    'ip_hash',
+    'ip_address',
     'user_agent',
     'device_type',
     'visitor_country',

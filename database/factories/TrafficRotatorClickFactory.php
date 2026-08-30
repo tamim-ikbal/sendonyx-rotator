@@ -31,11 +31,12 @@ class TrafficRotatorClickFactory extends Factory
             'plan_uid' => null,
             'customer_uid' => null,
             'visitor_id' => bin2hex(random_bytes(16)),
-            'ip_hash' => hash('sha256', fake()->ipv4()),
+            'ip_address' => fake()->ipv4(),
             'user_agent' => fake()->userAgent(),
             'device_type' => DeviceType::DESKTOP,
-            // Production leaves this null until geo detection lands; the
-            // factory fills it so statistics have something to aggregate.
+            // Filled unconditionally so the statistics always have something
+            // to aggregate. Production resolves this from the CDN header or the
+            // country database, and leaves it null when neither places the hit.
             'visitor_country' => Str::upper(fake()->countryCode()),
             'referrer' => fake()->url(),
         ];
