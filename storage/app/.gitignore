@@ -1,4 +1,6 @@
 *
 !private/
+!geo/
+!geo/countries.php
 !public/
 !.gitignore

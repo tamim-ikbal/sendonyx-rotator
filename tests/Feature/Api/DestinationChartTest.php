@@ -193,6 +193,22 @@ test('reports the leading device as a share of the visitors', function () {
     ]);
 });
 
+test('reports the leading country by name rather than by code', function () {
+    $destination = reportDestination();
+    $moment = CarbonImmutable::parse('2026-08-10 10:00:00', 'UTC');
+    TrafficRotatorClick::factory()->count(3)->forDestination($destination)->at($moment)
+        ->fromCountry('DE')->create();
+    TrafficRotatorClick::factory()->forDestination($destination)->at($moment)
+        ->fromCountry('FR')->create();
+
+    $response = chart($destination, StatsRange::LAST_30_DAYS);
+
+    $response->assertJsonPath('data.tiles.top_country', [
+        'name' => 'Germany',
+        'visitor_rate' => 75,
+    ]);
+});
+
 test('reports a null country while nothing populates one', function () {
     $destination = reportDestination();
     TrafficRotatorClick::factory()->count(2)->forDestination($destination)

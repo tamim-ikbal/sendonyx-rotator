@@ -66,11 +66,15 @@ return [
     | licensed and several megabytes, so it is fetched rather than committed,
     | and an environment without it simply records no country.
     |
+    | Clicks store the two letter code alone. The committed list named below is
+    | what turns that code into a country name wherever one is displayed.
+    |
     */
 
     'geo' => [
         'header' => env('ROTATOR_COUNTRY_HEADER', 'CF-IPCountry'),
         'database' => env('ROTATOR_GEO_DATABASE', storage_path('app/geoip/dbip-country-lite.mmdb')),
+        'countries' => storage_path('app/geo/countries.php'),
     ],
 
 ];

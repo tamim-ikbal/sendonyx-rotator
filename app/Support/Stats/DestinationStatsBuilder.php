@@ -5,6 +5,7 @@ namespace App\Support\Stats;
 use App\Enums\StatsRange;
 use App\Models\TrafficRotatorClick;
 use App\Models\TrafficRotatorDestination;
+use App\Support\Geo\CountryNames;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -81,7 +82,7 @@ final class DestinationStatsBuilder
                     'count',
                     $range,
                 ),
-                'top_country' => $this->dimensionTile($tops['country'], $totals->visitors),
+                'top_country' => $this->countryTile($tops['country'], $totals->visitors),
                 'top_device' => $this->dimensionTile($tops['device'], $totals->visitors),
             ],
         ];
@@ -266,6 +267,23 @@ final class DestinationStatsBuilder
             ->selectRaw($select)
             ->groupBy($column)
             ->toBase();
+    }
+
+    /**
+     * Shape the leading country tile, named rather than coded.
+     *
+     * Clicks store an ISO 3166-1 alpha-2 code; the tile is read by a person, so
+     * the name is resolved here at the edge of the report and the grouping
+     * itself stays on the two byte column.
+     *
+     * @return array{name: string|null, visitor_rate: float|null}
+     */
+    private function countryTile(?stdClass $top, int $visitors): array
+    {
+        $tile = $this->dimensionTile($top, $visitors);
+        $tile['name'] = CountryNames::name($tile['name']);
+
+        return $tile;
     }
 
     /**
